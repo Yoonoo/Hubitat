@@ -1,3 +1,13 @@
+/* 
+
+Version 2020.03.30
+
+Revision History
+Version 2020.03.30 
+- Initial Release
+
+*/
+
 metadata {
 	definition (name: "Rollease Acmeda Shade", namespace: "arcautomate", author: "Younes Oughla", vid: "generic-shade") {
 	capability "Initialize"
