@@ -1,4 +1,19 @@
+/* 
 
+Version 2020.03.30.1
+
+Revision History:
+
+Version 2020.03.30.1
+- Retry telnet connection when connection is dropped
+- Moved telnetClose to Initialize
+- Close telnet connection in case of telnet error
+- Added logError
+
+Version 2020.03.30
+- Initial Release
+
+*/
 
 metadata {
 	definition (name: "Rollease Acmeda Hub", namespace: "arcautomate", author: "Younes Oughla", vid: "generic-shade") {
@@ -15,6 +30,10 @@ metadata {
 	input ("hubAddress", "STRING",
 		title: "Hub Address", description: "IP Address of the Hub", defaultValue: "",
                 required: true, displayDuringSetup: true )
+        
+    input ("connectionRetryInterval", "Number",
+		title: "Connection Retry Interval", description: "Number of seconds to wait before re-attempting the connection. 0=Do Not Retry", defaultValue: "300",
+                required: false, displayDuringSetup: false )
 	
     input ("debug", "bool",
 		title: "Enable debug logging", description: "", defaultValue: false,required: false, displayDuringSetup: false )
@@ -23,12 +42,12 @@ metadata {
 }
 
 
-
-def initialize(){
-	telnetConnect([termChars:[59]],hubAddress, 1487, null, null)
-	logDebug "Opening telnet connection"
-  
+def initialize () {
+    telnetClose()    
+    logInfo "Opening telnet connection"
+    telnetConnect([termChars:[59]],hubAddress, 1487, null, null)
 }
+
 
 
 def sendTelnetCommand(String commandString) {
@@ -39,15 +58,14 @@ def sendTelnetCommand(String commandString) {
 
 
 def telnetStatus(String status){
-	logWarning "telnetStatus: error: " + status
-	
-   /*
-    if (status != "receive error: Stream is closed")
-	{
-		log.error "Connection was dropped."
-		initialize()
-	} 
-    */
+	logError "telnetStatus: error: " + status
+
+    if (connectionRetryInterval > 1 ){
+        logInfo "Will try to reconnect in ${connectionRetryInterval} seconds"
+        runIn(connectionRetryInterval, initialize)
+    }
+    
+    
     
 }
 
@@ -79,9 +97,6 @@ private parse(String msg)
 	
 }
 
-def requestStatus() {
-    sendCommand("r","?")
-}
 
 def configure(){
     log.info "Scanning for shades..."
@@ -108,6 +123,11 @@ private def logWarning(message) {
      log.warn "${device.name} ${message}"  
 }
 
+private def logError(message) {
+     log.error "${device.name} ${message}"  
+}
+
+
 
 def installed(){
 	initialize()
@@ -115,6 +135,5 @@ def installed(){
 }
 
 def updated(){
-    telnetClose()
 	initialize()
 }
