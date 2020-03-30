@@ -39,7 +39,7 @@ def sendTelnetCommand(String commandString) {
 
 
 def telnetStatus(String status){
-	logError "telnetStatus: error: " + status
+	logWarning "telnetStatus: error: " + status
 	
    /*
     if (status != "receive error: Stream is closed")
