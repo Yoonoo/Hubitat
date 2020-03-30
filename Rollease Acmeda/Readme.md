@@ -1,6 +1,8 @@
 # Hubitat Drivers for Rollease Acmeda Hub & Shades
 
-These drivers add Hubitat support for Rollease Acmeda Shades. This was tested with the Automate Pulse 2 Hub.
+These drivers add support for Rollease Acmeda Shades in Hubitat.
+
+This was tested with the Automate Pulse 2 Hub, but may work with the older generation hub since it uses the same ARC serial protocol via Telnet.
 
 # Installation
 1) Make sure your hub has been configured and the shades added via the AutomatePulse App (https://www.rolleaseacmeda.com/us/products/product-detail/automate-pulse-2US)
