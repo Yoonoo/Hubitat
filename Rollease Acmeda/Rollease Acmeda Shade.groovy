@@ -1,6 +1,10 @@
 /* 
 
-Version 2020.03.30
+Version 2020.06.08.01
+Release Notes:
+- Added "opening" and "closing" states to the windowShade attribute
+- Added "toggle" command
+
 
 Revision History
 Version 2020.03.30 
@@ -17,6 +21,7 @@ metadata {
     capability "Window Shade"
         
     command  "stop"
+    command  "toggle"
         
     attribute "open", "bool"
     attribute "closed", "bool"
@@ -74,6 +79,45 @@ def stop() {
   sendCommand("s","")  
 }
 
+def toggle() {
+    logDebug "Toggling Shade"
+  
+    currentStatus = device.currentValue("windowShade")
+  
+    switch (currentStatus) {
+    
+        case "opening":
+        case "closing":
+            stop()
+            break;
+  
+        case "open":
+            close()
+            break;
+        case "closed":
+            open()
+            break;
+        case "partially open":
+            if (state.lastDirection == "closing") {
+                open()    
+            }
+            else{
+                close()
+            }    
+            break;
+        default:
+            open()
+            break;
+        
+            
+    }
+    
+    
+  
+    
+}
+
+
 def setPosition(position) {
     logDebug "Set Position: ${position}"
     
@@ -110,6 +154,26 @@ def parse(String msg) {
     if(msg.startsWith("!${motorAddress}m"))
 	{
 		sendEvent(name: "moving", value: true)
+        
+        positionStr = msg.substring(5, 8)
+        
+        targetPosition = 100 - Integer.parseInt(positionStr)
+        currentPosition = device.currentValue("position")
+     
+        
+        
+        if (targetPosition > currentPosition) {
+            sendEvent(name: "windowShade", value: "opening")
+            state.lastDirection = "opening"
+            
+        }
+        
+        if (targetPosition < currentPosition) {
+            sendEvent(name: "windowShade", value: "closing")
+            state.lastDirection = "closing"
+        }
+     
+        
 	}
     
     if(msg.startsWith("!${motorAddress}pVc"))
