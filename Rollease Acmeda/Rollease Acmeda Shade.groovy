@@ -56,19 +56,16 @@ def setLevel(level) {
 def open() {
 	logDebug "Opening Shade"
 	sendCommand("m","000")
-	break;
 }
 
 def close() {
 	logDebug "Closing Shade"
 	sendCommand("m","100")
-	break;
 }
 
 def stop() {
 	logDebug "Stopping Shade"
 	sendCommand("s","")
-	break;
 }
 
 def toggle() {
@@ -94,7 +91,6 @@ def toggle() {
 			break;
 		default:
 			open()
-			break;
 	}
 }
 
@@ -118,6 +114,7 @@ def parse(String msg) {
 			positionStr = msg.substring(5, 8)
 			position = 100 - Integer.parseInt(positionStr)
 			positionUpdated(position)
+			break;
 		case "m":
 			sendEvent(name: "moving", value: true)
 			positionStr = msg.substring(5, 8)
