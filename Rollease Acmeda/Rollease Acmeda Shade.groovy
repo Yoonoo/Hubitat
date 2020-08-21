@@ -1,12 +1,5 @@
 /* 
 
-Version 2020.08.21
-Release Notes:
-- Removed switch capabilities
-
-
-Revision History
-
 Version 2020.08.16
 Release Notes:
 - Reduced whitespace
@@ -17,6 +10,8 @@ Release Notes:
 - Added "opening" and "closing" states to the windowShade attribute
 - Added "toggle" command
 
+
+Revision History
 Version 2020.03.30 
 - Initial Release
 
@@ -29,9 +24,11 @@ metadata {
 		capability "WindowShade"
 		command  "stop"
 		command  "toggle"
+		command  "voltage"
 		attribute "open", "bool"
 		attribute "closed", "bool"
 		attribute "position", "int"
+		attribute "speed", "int"
 		attribute "moving","bool"
 		attribute "voltage","int"
 		attribute "speed","int"
@@ -85,6 +82,11 @@ def toggle() {
 	}
 }
 
+def voltage() {
+	logDebug "Request motor voltage"
+	sendCommand("pVc?","")
+}
+
 def setPosition(position) {
 	logDebug "Set Position: ${position}"
 	positionString = 100-position
@@ -120,17 +122,10 @@ def parse(String msg) {
 				state.lastDirection = "closing"
 			}
 			break;
-		case "p":
-			switch (msg.substring(5, 7)) {
-				case "Vc":
-					voltageStr = msg.substring(7)
-					sendEvent(name: "voltage", value: voltageStr)
-					break;
-				case "Sc":
-					speedStr = msg.substring(7)
-					sendEvent(name: "speed", value: speedStr)
-					break;
-			}
+		case "pVc":
+			voltageStr = msg.substring(7, 12)
+			voltageStr = Integer.parseInt(voltageStr) / 100
+			sendEvent(name: "voltage", value: voltageStr)
 			break;
 	}
 }
