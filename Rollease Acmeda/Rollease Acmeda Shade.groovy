@@ -1,180 +1,163 @@
 /* 
 
-Version 2020.08.16
+Version 2020.08.21
+
 Release Notes:
-- Reduced whitespace
-- Added "speed" attribute
+- Cleaned whitespace
 
-Version 2020.06.08.01
+
+Revision History:
+
+Version 2020.06.08.1
+
 Release Notes:
-- Added "opening" and "closing" states to the windowShade attribute
-- Added "toggle" command
+- Added Maximum Idle Time
+- Ignore invalid shade addresses
 
+Version 2020.03.30.1
+- Retry telnet connection when connection is dropped
+- Moved telnetClose to Initialize
+- Close telnet connection in case of telnet error
+- Added logError
 
-Revision History
-Version 2020.03.30 
+Version 2020.03.30
 - Initial Release
 
 */
 
 metadata {
-	definition (name: "Rollease Acmeda Shade", namespace: "arcautomate", author: "Younes Oughla", vid: "generic-shade") {
+	definition (name: "Rollease Acmeda Hub", namespace: "arcautomate", author: "Younes Oughla", vid: "generic-shade") {
 		capability "Initialize"
+		capability "Telnet"
 		capability "Refresh"
-		capability "Switch Level"
-		capability "Switch"
-		capability "WindowShade"
-		command  "stop"
-		command  "toggle"
-		attribute "open", "bool"
-		attribute "closed", "bool"
-		attribute "position", "int"
-		attribute "moving","bool"
-		attribute "voltage","int"
-		attribute "speed","int"
+		capability "Configuration" 
+		command  "sendTelnetCommand", ["commandString"]
 	}
-	preferences {
-		input ("motorAddress", "STRING", title: "Motor Address", description: "", defaultValue: "000", required: true, displayDuringSetup: true )
-		input ("debug", "bool", title: "Enable debug logging", description: "", defaultValue: false, required: false, displayDuringSetup: false )
-	}
-}
-
-def initialize() { logDebug "Motor Address: ${settings?.motorAddress}" }
-
-def on() {
-	open()
-}
-
-def off() {
-	close()
-}
-
-def setLevel(level) {
-	setPosition(level)
-}
-
-def open() {
-	logDebug "Opening Shade"
-	sendCommand("m","000")
-}
-
-def close() {
-	logDebug "Closing Shade"
-	sendCommand("m","100")
-}
-
-def stop() {
-	logDebug "Stopping Shade"
-	sendCommand("s","")
-}
-
-def toggle() {
-	logDebug "Toggling Shade"
-	currentStatus = device.currentValue("windowShade")
-	switch (currentStatus) {
-		case "opening":
-		case "closing":
-			stop()
-			break;
-		case "open":
-			close()
-			break;
-		case "closed":
-			open()
-			break;
-		case "partially open":
-			if (state.lastDirection == "closing") {
-				open()
-			} else {
-				close()
-			}
-			break;
-		default:
-			open()
+    preferences {
+		input ("hubAddress", "STRING", 
+			title: "Hub Address", 
+			description: "IP Address of the Hub", 
+			defaultValue: "", 
+			required: true, 
+			displayDuringSetup: true
+		)
+		input ("connectionRetryInterval", "Number", 
+			title: "Connection Retry Interval", 
+			description: "Number of seconds to wait before re-attempting the connection. 0=Do Not Retry", 
+			defaultValue: "300", 
+			required: false, 
+			displayDuringSetup: false
+		)
+		input ("maxIdleTime", "Number", 
+			title: "Maximum Idle Time", 
+			description: "Reset connection to hub if no status reports are received within this time (Seconds). 0=Disabled", 
+			defaultValue: "3600", 
+			required: false, 
+			displayDuringSetup: false
+		)
+/*
+		input ("keepAliveInterval", "Number", 
+			title: "Keep-Alive Interval", 
+			description: "Send Keep-Alive packets to hub in order to detect when connection is interrupted (Seconds). 0=Disabled", 
+			defaultValue: "300", 
+			required: false, 
+			displayDuringSetup: false
+		)
+*/
+		input ("debug", "bool", 
+			title: "Enable debug logging", 
+			description: "", 
+			defaultValue: false, 
+			required: false, 
+			displayDuringSetup: false
+		)
 	}
 }
 
-def setPosition(position) {
-	logDebug "Set Position: ${position}"
-	positionString = 100-position
-	positionString = "000${positionString}"
-	positionString = positionString[-3..-1]
-	sendCommand("m",positionString)
+def initialize () {
+	telnetClose()
+	logInfo "Opening telnet connection"
+	telnetConnect([termChars:[59]],hubAddress, 1487, null, null)
+	startMaxIdleTimer()
+/*
+	if (keepAliveInterval > 0) {
+		runIn(keepAliveInterval, "keepAlive");
+	}
+*/
 }
 
-def sendCommand(String command, String commandData) {
-	commandString = "!${motorAddress}${command}${commandData}"
-	logDebug "Send Command: ${commandString}"
-	parent.sendTelnetCommand(commandString)
+def sendTelnetCommand(String commandString) {
+	logDebug "Sending Telnet Command: ${commandString}"
+	return new hubitat.device.HubAction(commandString,hubitat.device.Protocol.TELNET)
 }
 
-def parse(String msg) {
-	switch (msg.substring(4, 5)) {
-		case "r":
-			positionStr = msg.substring(5, 8)
-			position = 100 - Integer.parseInt(positionStr)
-			positionUpdated(position)
-			break;
-		case "m":
-			sendEvent(name: "moving", value: true)
-			positionStr = msg.substring(5, 8)
-			targetPosition = 100 - Integer.parseInt(positionStr)
-			currentPosition = device.currentValue("position")
-			if (targetPosition > currentPosition) {
-				sendEvent(name: "windowShade", value: "opening")
-				state.lastDirection = "opening"
-			}
-			if (targetPosition < currentPosition) {
-				sendEvent(name: "windowShade", value: "closing")
-				state.lastDirection = "closing"
-			}
-			break;
-		case "p":
-			switch (msg.substring(5, 7)) {
-				case "Vc":
-					voltageStr = msg.substring(7)
-					sendEvent(name: "voltage", value: voltageStr)
-					break;
-				case "Sc":
-					speedStr = msg.substring(7)
-					sendEvent(name: "speed", value: speedStr)
-					break;
-			}
-			break;
+def telnetStatus(String status) {
+	logError "telnetStatus: error: " + status
+	if (connectionRetryInterval > 1 ) {
+		logInfo "Will try to reconnect in ${connectionRetryInterval} seconds"
+		runIn(connectionRetryInterval, initialize)
 	}
 }
 
-def positionUpdated(position) {
-	logDebug "Position Updated: ${position}"
-	if (position == 100) {
-		sendEvent(name: "open", value: true)
-		sendEvent(name: "closed", value: false)
-		sendEvent(name: "windowShade", value: "open")
-	} else if (position == 0) {
-		sendEvent(name: "closed", value: true)
-		sendEvent(name: "open", value: false)
-		sendEvent(name: "windowShade", value: "closed")
-	} else {
-		sendEvent(name: "closed", value: false)
-		sendEvent(name: "open", value: false)
-		sendEvent(name: "windowShade", value: "partially open")
+private parse(String msg) {
+	logDebug("Event Received: " + msg)
+	motorAddress = msg[1..3]
+	lastThree = msg[-3..-1]
+	// Ignore Telnet Errors and Hub Events
+	if (motorAddress == "EUC" || motorAddress == "BR1" || lastThree == "Enp") {
+		return;
 	}
-	sendEvent(name: "position", value: position)
-	sendEvent(name: "moving", value: false)
+	String thisId = device.deviceNetworkId
+	def cd = getChildDevice("${thisId}-${motorAddress}")
+	if (!cd) {
+		logInfo "Found New Shade: " + motorAddress
+		cd = addChildDevice("arcautomate", "Rollease Acmeda Shade", "${thisId}-${motorAddress}", [name: "Rollease Acmeda Shade - ${motorAddress}", isComponent: false])
+		cd.updateSetting("motorAddress",[type:"STRING",value:motorAddress])
+	}
+	cd.parse(msg)
+	startMaxIdleTimer()
 }
 
-def requestStatus() {
-	sendCommand("r","?")
+def private startMaxIdleTimer() {
+	//Reset Maximum Idle Time
+	//Y.O. 5/4/2020 No need to unschedule all timers since this affects connection retry timer. Calling runIn with the same function overwrites any existing runIns for that function
+	//unschedule()
+	if (maxIdleTime > 0 ) {
+		logDebug "Will reset connection if no events received in ${maxIdleTime} seconds"
+		runIn(maxIdleTime, "resetConnection")
+	}
+}
+
+def configure() {
+	log.info "Scanning for shades..."
+	sendTelnetCommand "!000v?"
 }
 
 def refresh() {
-	logDebug "Refreshing"
-	requestStatus()
+	
+}
+
+/*
+//Y.O. 5/4/2020 Hubitat does not appear to send scheduled telnet commands in the background.
+private def keepAlive() {
+	if (keepAliveInterval > 0) {
+		log.info "Sending Keep-Alive"
+		sendTelnetCommand "!BR1v?"
+		runIn(keepAliveInterval, "keepAlive")
+	}
+}
+*/
+
+private def resetConnection() {
+	log.info "Resetting Connection..."
+	initialize()
 }
 
 private def logDebug(message) {
-	if (!debug) { return; }
-	log.debug "${device.name} ${message}"  
+	if (!debug) {
+		return;
+	}
+	log.debug "${device.name} ${message}"
 }
 
 private def logInfo(message) {
@@ -183,6 +166,10 @@ private def logInfo(message) {
 
 private def logWarning(message) {
 	log.warn "${device.name} ${message}"
+}
+
+private def logError(message) {
+	log.error "${device.name} ${message}"
 }
 
 def installed() {
