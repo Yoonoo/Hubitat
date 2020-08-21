@@ -1,5 +1,12 @@
 /* 
 
+Version 2020.08.21
+Release Notes:
+- Removed switch capabilities
+
+
+Revision History
+
 Version 2020.08.16
 Release Notes:
 - Reduced whitespace
@@ -10,8 +17,6 @@ Release Notes:
 - Added "opening" and "closing" states to the windowShade attribute
 - Added "toggle" command
 
-
-Revision History
 Version 2020.03.30 
 - Initial Release
 
@@ -21,8 +26,6 @@ metadata {
 	definition (name: "Rollease Acmeda Shade", namespace: "arcautomate", author: "Younes Oughla", vid: "generic-shade") {
 		capability "Initialize"
 		capability "Refresh"
-		capability "Switch Level"
-		capability "Switch"
 		capability "WindowShade"
 		command  "stop"
 		command  "toggle"
@@ -40,18 +43,6 @@ metadata {
 }
 
 def initialize() { logDebug "Motor Address: ${settings?.motorAddress}" }
-
-def on() {
-	open()
-}
-
-def off() {
-	close()
-}
-
-def setLevel(level) {
-	setPosition(level)
-}
 
 def open() {
 	logDebug "Opening Shade"
