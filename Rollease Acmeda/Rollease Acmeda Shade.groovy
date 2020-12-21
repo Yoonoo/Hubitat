@@ -208,6 +208,7 @@ def positionUpdated(position) {
         
         
         sendEvent(name: "position", value: position)
+        sendEvent(name: "level", value: position)
         sendEvent(name: "moving", value: false)
 }
 
